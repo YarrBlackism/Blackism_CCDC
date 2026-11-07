@@ -51,28 +51,43 @@ done
 echo "enumerating open ports and connections"
 sudo ss -tulnp 
 
-read -p "Would you like to harden the firewall(y for yes)"
-if [[ "$choice" == "y" || "$choice" == "Y" ]]; then
-    echo "Starting server hardening..."
-    
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh/tcp
-ufw allow 443/tcp 
-ufw allow 25/tcp
-ufw allow 143/tcp
-ufw allow 993/tcp
-ufw allow 110/tcp
-ufw allow 587/tcp
-ufw enable 
+read -p "Would you like to harden the firewall? (y/n): " choice
 
-read -p "Would you like to harden the crontab(y for yes)"
 if [[ "$choice" == "y" || "$choice" == "Y" ]]; then
-    echo "Starting server hardening..."
-    
-chmod 750 /etc/crontab
-chmod 750 /etc/cron.hourly
-chmod 750 /etc/cron.daily
-chmod 750 /etc/cron.weekly
-chmod 750 /etc/cron.monthly
-chmod 750 /etc/cron.d
+
+    echo "Starting firewall hardening..."
+
+    ufw default deny incoming
+    ufw default allow outgoing
+
+    ufw allow ssh/tcp
+    ufw allow 443/tcp
+    ufw allow 25/tcp
+    ufw allow 143/tcp
+    ufw allow 993/tcp
+    ufw allow 110/tcp
+    ufw allow 587/tcp
+
+    ufw --force enable
+
+    echo "done"
+
+fi
+
+read -p "Would you like to harden cron? (y/n): " choice
+
+if [[ "$choice" == "y" || "$choice" == "Y" ]]; then
+
+    echo "Starting cron hardening..."
+
+    chmod 600 /etc/crontab
+
+    chmod 750 /etc/cron.hourly
+    chmod 750 /etc/cron.daily
+    chmod 750 /etc/cron.weekly
+    chmod 750 /etc/cron.monthly
+    chmod 750 /etc/cron.d
+
+    echo "done"
+
+fi
