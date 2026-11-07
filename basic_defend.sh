@@ -1,5 +1,8 @@
 #!/bin/bash
-echo "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+ALLOW_PORTS=(25 110 143 443 587 993)
+BACKUP_DIR="/root/hardening-backups/$(date +%Y%m%d-%H%M%S)"
+cat << 'EOF'
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⠀⠀⠀⠀⠀⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⡿⠇⠀⠀⠀⠀⢻⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -23,133 +26,207 @@ echo "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀�
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⠹⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢯⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⠒⡈⠀⡀⠄⡑⠢⣉⠴⣈⣆
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢯⣏⡴⣶⣵⣢⢤⢠⡀⡄⢠⠐⡰⢌⡱⠀⡁⡀⠆⡥⠆⡥⣛⡽⣾
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠔⠉⠀⠀⢽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣼⣻⢷⣯⡽⣞⣷⣻⡼⣡⢋⡔⠣⠜⡐⢐⠠⡓⣤⣙⣲⣽⣻⢷
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡿⣽⣞⣷⣻⡴⣣⢜⡱⣊⡕⣊⠠⡙⡰⣭⢷⣯⣿⢿"
-echo  "----------------------------------------------------------------------------"
-echo "starting basic enumeration of mail server"
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡿⣽⣞⣷⣻⡴⣣⢜⡱⣊⡕⣊⠠⡙⡰⣭⢷⣯⣿⢿
+EOF
+echo "----------------------------------------------------------------------------"
+
 if [ "$EUID" -ne 0 ]; then
     echo "use sudo"
     exit 1
 fi
-echo "locating suid bit set binaries"
-# Restrict search to common system directories to improve performance
-sudo find / -xdev -perm /6000 -type f -print 2>/dev/null
-    sudo find "$dir" -perm /6000 -type f -exec ls -la {} \; 2>/dev/null
-done
-sudo find / -xdev -perm /6000 -type f -print
 
-echo "mail server settings"
+
+command -v sshd >/dev/null && mkdir -p /run/sshd
+
+ask() {
+    local reply
+    read -r -p "$1 (y/n): " reply
+    [[ "$reply" == [Yy] ]]
+}
+backup() {
+    mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
+    cp -p --parents "$1" "$BACKUP_DIR"
+}
+
+restore() {
+    cp -p "$BACKUP_DIR$1" "$1"
+}
+
+section() {
+    printf '\n===== %s =====\n' "$1"
+}
+
+
+echo "starting basic enumeration of mail server"
+
+section "SUID/SGID binaries"
+find / -xdev -perm /6000 -type f -exec ls -la {} + 2>/dev/null
+
+section "Postfix settings"
 postconf -n | grep -E 'mail|smtp|relay|myhostname|mydomain'
 
-echo "Looking for world writeable files"
-sudo find / -xdev -type f -perm -0002 -print
+section "World-writable files"
+find / -xdev -type f -perm -0002 -print 2>/dev/null
 
-echo "enumerating cronjobs"
-sudo ls -la /etc/cron*
-sudo ls -la /var/spool/cron
-
+section "Cron jobs"
+ls -la /etc/cron*
+ls -laR /var/spool/cron 2>/dev/null
 while IFS=: read -r user _; do
-  sudo crontab -u "$user" -l 2>/dev/null
+    if ct=$(crontab -u "$user" -l 2>/dev/null); then
+        echo "--- crontab for $user ---"
+        echo "$ct"
+    fi
 done < /etc/passwd
 
-echo "enumerating open ports and connections"
-sudo ss -tulnp 
+section "Open ports"
+ss -tulnp
 
-read -p "Would you like to harden the firewall? (y/n): " choice
 
-if [[ "$choice" == "y" || "$choice" == "Y" ]]; then
 
+harden_firewall() {
+    if ! command -v ufw >/dev/null 2>&1; then
+        echo "ufw isn't installed (apt install ufw) - skipping"
+        return 1
+    fi
     echo "Starting firewall hardening..."
+
+    local ssh_port port proc
+    ssh_port=$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}')
+    ssh_port=${ssh_port:-22}
+
+    ufw allow "$ssh_port/tcp"
+    for port in "${ALLOW_PORTS[@]}"; do
+        ufw allow "$port/tcp"
+    done
+
+    for port in $(ss -Htln | awk '{print $4}' | grep -vE '^(127\.|\[::1\])' \
+                  | sed -E 's/.*:([0-9]+)$/\1/' | sort -un); do
+        [[ " $ssh_port ${ALLOW_PORTS[*]} " == *" $port "* ]] && continue
+        proc=$(ss -Htlnp "sport = :$port" | grep -oP 'users:\(\("\K[^"]+' | head -n1)
+        if ask "Port $port (${proc:-unknown process}) is listening but would be blocked. Allow it?"; then
+            ufw allow "$port/tcp"
+        fi
+    done
 
     ufw default deny incoming
     ufw default allow outgoing
-
-    ufw allow ssh/tcp
-    ufw allow 443/tcp
-    ufw allow 25/tcp
-    ufw allow 143/tcp
-    ufw allow 993/tcp
-    ufw allow 110/tcp
-    ufw allow 587/tcp
-
     ufw --force enable
+    ufw status numbered
+    echo "Review the rules above. Remove any you didn't add with: ufw delete <number>"
+}
 
-    echo "done"
-
-fi
-
-read -p "Would you like to harden cron? (y/n): " choice
-
-if [[ "$choice" == "y" || "$choice" == "Y" ]]; then
-
+harden_cron() {
     echo "Starting cron hardening..."
-
+    chown root:root /etc/crontab
     chmod 600 /etc/crontab
-
-    chmod 750 /etc/cron.hourly
-    chmod 750 /etc/cron.daily
-    chmod 750 /etc/cron.weekly
-    chmod 750 /etc/cron.monthly
-    chmod 750 /etc/cron.d
-
+    local d
+    for d in /etc/cron.hourly /etc/cron.daily /etc/cron.weekly /etc/cron.monthly /etc/cron.yearly /etc/cron.d; do
+        [ -d "$d" ] || continue
+        chown root:root "$d"
+        chmod 750 "$d"
+    done
     echo "done"
+}
 
-fi
+harden_postfix() {
+    if [ ! -d /etc/postfix ]; then
+        echo "/etc/postfix not found - is Postfix installed? skipping"
+        return 1
+    fi
+    echo "Starting Postfix hardening..."
+    backup /etc/postfix/main.cf
 
-read -p "Would you like to harden email config? (y/n):" choice
-
-if [[ "$choice" == "y" || "$choice" == "Y" ]]; then
-
-    echo "Starting hardening postfix..."
-
+    chown root:root /etc/postfix /etc/postfix/main.cf /etc/postfix/master.cf
     chmod 755 /etc/postfix
-    chmod 644 /etc/postfix/*.cf
-    chmod 755 /etc/postfix/postfix-script*
+    chmod 644 /etc/postfix/main.cf /etc/postfix/master.cf
+    chmod 755 /etc/postfix/postfix-script* 2>/dev/null
     chmod 755 /var/spool/postfix
-    chown root:root /var/log/mail*
-    files=(/var/log/mail*)
-    if compgen -G "/var/log/mail*" > /dev/null; then
-        chmod 600 /var/log/mail*
+
+
+    grep -rlE --include='*.cf' '^[[:space:]]*(password|bind_pw)[[:space:]]*=' /etc/postfix 2>/dev/null |
+    while read -r f; do
+        chown root:postfix "$f"
+        chmod 640 "$f"
+        echo "  locked down $f"
+    done
+
+    local f
+    for f in /var/log/mail*; do
+        [ -f "$f" ] || continue
+        id syslog >/dev/null 2>&1 && chown syslog:adm "$f"
+        chmod 640 "$f"
+    done
+
+    postconf -e "default_process_limit = 100"
+    postconf -e "smtpd_client_connection_count_limit = 10"
+    postconf -e "smtpd_client_connection_rate_limit = 30"
+    postconf -e "queue_minfree = 20971520"
+    postconf -e "header_size_limit = 51200"
+    postconf -e "message_size_limit = 10485760"
+    postconf -e "smtpd_recipient_limit = 100"
+    if [ -n "$SCORER_IP" ]; then
+        postconf -e "smtpd_client_event_limit_exceptions = \$mynetworks, $SCORER_IP"
     fi
-        chmod 600 /var/log/mail*
+    
+    if postfix check; then
+        postfix reload 2>/dev/null || systemctl restart postfix
+        echo "done"
+    else
+        echo "postfix check failed - restored the old main.cf, Postfix NOT reloaded"
+        restore /etc/postfix/main.cf
+        return 1
+    fi
+}
+
+harden_ssh() {
+    local cfg=/etc/ssh/sshd_config f
+    if [ ! -f "$cfg" ]; then
+        echo "$cfg not found - skipping"
+        return 1
+    fi
+    if [ -z "$(getent group sudo | cut -d: -f4)" ]; then
+        echo "WARNING: nobody is in the sudo group. If you only log in as root, this locks you out."
+        ask "Continue anyway?" || return 1
+    fi
+    echo "Disabling root SSH login..."
+
+    local files=("$cfg" /etc/ssh/sshd_config.d/*.conf)
+    for f in "${files[@]}"; do
+        [ -f "$f" ] || continue
+        backup "$f"
+        sed -i -E 's/^[#[:space:]]*PermitRootLogin.*/PermitRootLogin no/I' "$f"
+    done
+
+    if ! grep -qiE '^PermitRootLogin' "$cfg"; then
+        sed -i '1i PermitRootLogin no' "$cfg"
     fi
 
-    sudo postconf -e "default_process_limit = 100"
-    sudo postconf -e "smtpd_client_connection_count_limit = 10"
-    sudo postconf -e "smtpd_client_connection_rate_limit = 30"
-    sudo postconf -e "queue_minfree = 20971520"
-    sudo postconf -e "header_size_limit = 51200"
-    sudo postconf -e "message_size_limit = 10485760"
-    sudo postconf -e "smtpd_recipient_limit = 100"
-    service postfix restart
+    if ! sshd -t; then
+        echo "sshd config test failed - restored the backups, SSH left as it was"
+        for f in "${files[@]}"; do
+            [ -f "$BACKUP_DIR$f" ] && restore "$f"
+        done
+        return 1
+    fi
 
-    echo "done"
-fi
+    if systemctl is-active --quiet ssh; then
+        systemctl restart ssh
+    elif systemctl is-active --quiet sshd; then
+        systemctl restart sshd
+    elif systemctl is-active --quiet ssh.socket; then
+        echo "SSH is socket-activated - the change applies to new connections"
+    else
+        echo "WARNING: couldn't find a running SSH service - restart it manually"
+    fi
+    echo "Effective setting: $(sshd -T 2>/dev/null | grep -i '^permitrootlogin')"
+}
 
-read -p "Would you like to perform updates? (y/n):" choice
+echo
+ask "Would you like to harden the firewall?" && harden_firewall
+ask "Would you like to harden cron?" && harden_cron
+ask "Would you like to harden the Postfix config?" && harden_postfix
+ask "Would you like to disable root SSH login?" && harden_ssh
 
-if [["$choice" == "y" || "$choice" == "Y"]]; then
-    SSHD_CONFIG="/etc/ssh/sshd_config"
-    echo "Securing SSH: Disabling root login..."
-# Backup the original sshd_config file
-    cp "$SSHD_CONFIG" "${SSHD_CONFIG}.bak"
-# Check if PermitRootLogin directive exists
-    if grep -qE "^[#]*\s*PermitRootLogin" "$SSHD_CONFIG"; then
-    # Replace the existing line (whether commented or not) with 'PermitRootLogin no'
-    sed -i -E 's/^[#]*\s*PermitRootLogin.*/PermitRootLogin no/' "$SSHD_CONFIG"
-        else
-    # Append to the file if it does not exist
-    echo "PermitRootLogin no" >> "$SSHD_CONFIG"
-fi
-# Determine the correct SSH service name and restart it
-    if systemctl is-active --quiet sshd; then
-    echo "Restarting sshd service..."
-    systemctl restart sshd
-elif systemctl is-active --quiet ssh; then
-    echo "Restarting ssh service..."
-    systemctl restart ssh
-else
-    echo "Warning: SSH service could not be identified or is not running. Please restart it manually."
-fi
-echo "Success! SSH root login has been disabled."
-
-
+echo
+echo "Finished."
+[ -d "$BACKUP_DIR" ] && echo "Backups of changed configs are in $BACKUP_DIR"
