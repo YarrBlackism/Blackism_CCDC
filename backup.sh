@@ -5,7 +5,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH
 
 VERSION="1.0"
 SELF="${BASH_SOURCE[0]:-ccdc-mail.sh}"
-OUTDIR="/root/ccdc"
+OUTDIR="/linuxEnnum"
 TS="$(date +%Y%m%d-%H%M%S)"
 EXPECTED_TCP="22 25 80 110 143 443 993 995"
 EXPECTED_UDP="68 123 323 546"
